@@ -89,6 +89,7 @@ class SpectraData:
     OBS.: caso não utilize o parâmetro, o padrão ';' será utilizado
     """
     def importSpectra(self, wl_multiplier=1, separator=';'):
+        self.spectra = list()
         for file in self.files:
             try:
                 spectrum = np.loadtxt(fname=file, delimiter=separator)
@@ -152,6 +153,7 @@ class SpectraData:
                                        ‘quadratic’, ‘cubic’, ‘previous’, ‘next’)
     """
     def interpolateSpectra(self, wl, kind):
+        self.optical_powers = list()
         from scipy import interpolate
         self.wl = wl
         for spectrum in self.spectra:
@@ -202,7 +204,7 @@ class SpectraData:
     Retorna os comprimentos de onda ressonante
     """
     def getWlRes(self):
-        return self.wl_res
+        return np.array(self.wl_res)
     
     """ plotSpectra
     Mostra os espectros
