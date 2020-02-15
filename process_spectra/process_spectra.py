@@ -14,6 +14,7 @@ from scipy import signal as sg
 class SpectraData:
     spectra = list()
     wl_res = list()
+    wl_res_att = list()
     files = list()
     measurements = np.array(list())
     
@@ -161,7 +162,7 @@ class SpectraData:
             self.optical_powers.append(interpolant(wl))
     
     """ detectWlRes
-    Detecta o compirmento de onda ressonante
+    Detecta o comprimento de onda ressonante
     
     wl: vetor dos compriemntos de onda ressonante do espectro
     power: vetor com potência optica do espectro
@@ -174,7 +175,7 @@ class SpectraData:
             print('Resonant wavelength detection error!')
             return -1
         else:
-            return wl[peaks]
+            return wl[peaks], power[peaks]
     
     """ updateWlRes
     Encontra o comprimento de onda resonante de cada espectro
@@ -191,14 +192,14 @@ class SpectraData:
 
         if use_interp_data:
             for optical_power in self.optical_powers:
-                self.wl_res.append(
-                        self.detectWlRes(self.wl, optical_power, threshold)
-                        )
+                wl, power = self.detectWlRes(self.wl, optical_power, threshold)
+                self.wl_res.append(wl)
+                self.wl_res_att.append(power)
         else:
             for spectrum in self.spectra:
-                self.wl_res.append(
-                        self.detectWlRes(spectrum[::,0], spectrum[::,1], threshold)
-                        )                
+                wl, power = self.detectWlRes(spectrum[::,0], spectrum[::,1], threshold)
+                self.wl_res.append(wl)   
+                self.wl_res_att.append(power)
     
     """ getWlRes
     Retorna os comprimentos de onda ressonante
@@ -219,12 +220,12 @@ class SpectraData:
         ax.set_ylim(plot_opts['ylim'])
         ax.set_xlabel('Wavelength (nm)')
         ax.set_ylabel('Optical power (dBm)')
+        i = 0
         for spectrum in self.spectra:
-            if plot_opts['animated']:
-                for artist in ax.lines + ax.collections:
-                    artist.remove()
-                plt.pause(plot_opts['interval'])
-            ax.plot(spectrum[::,0]*1e9, spectrum[::,1])        
+            if len(self.wl_res) > 0:
+                ax.plot(self.wl_res[i]*1e9, self.wl_res_att[i], 'xk')  
+            ax.plot(spectrum[::,0]*1e9, spectrum[::,1])
+            i+=1
     
     """ getSpectra
     Retorna uma lista com os espectros
