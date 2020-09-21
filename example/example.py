@@ -1,47 +1,42 @@
-import process_spectra as ps
-import numpy as np
+"""
+Um exemplo mostrando uma utilização do process_spectra.
+Nesse exemplo, um grupo de espectros na pasta local '/spectrums' é lido,
+filtrado, interpolado e tem seus valores do vale ressonante encontrados. Ao
+final, são plotados em um único gráfico e os comprimentos de onda ressonante
+são salvos em um arquivo 'final.csv'.
+"""
+
+import os
+import sys
 from matplotlib import pyplot as plt
-from scipy import stats as st
-import os 
 
-path = os.path.dirname(os.path.realpath(__file__)) + '/'
+sys.path.insert(0, os.path.abspath('..'))
+from process_spectra.process_spectra import SpectrumData, MassSpectraData
 
-sd = ps.SpectraData(path + 'data/')
-# o OSA exporta o compriemnto de onda em nm, devemos multiplicar por 1e-9 na importação
-sd.importSpectra(wl_multiplier=1e-9)
-# dicionário com opções de plotar (é usado pelo pacote)
-plot_opts = {'xlim': (1470, 1530), 'ylim': (-70, -50), 'animated': False, 'interval': 1e-6}
-sd.plotSpectra(plot_opts)
 
-# filtrar o espectro com savitz-golay
-window_size = 45
-order = 3
-sd.filterSpectra(window_size, order)
+files = os.listdir('spectrums')
 
-# interpola os espectros para os compriemntos de onda abaixo
-wl = np.arange(1470e-9, 1530e-9, 0.5e-12)
-sd.interpolateSpectra(wl, 'cubic')
-#detecta os comprimentos de onda ressonantes
-threshold = 5
-sd.updateWlRes(threshold)
-# seta os valores de mensurando utilizados no experimento
-temps = np.array([21.9,23,24.6,29.8,32.3,37.4])
-sd.setMeasurements(temps)
-# exporta os comprimentos de onda ressonantes e mensurandos para um excel
-sd.exportData(path + "export.xls")
+spectra = MassSpectraData([os.path.join('spectrums', x) for x in files])
 
-# curva de calibração
-wl_res = sd.getWlRes()
-plt.figure()
-plt.plot(wl_res*1e9, temps, 'or', label='Experimental data')
-plt.xlabel('$\lambda_{res}$ (nm)')
-plt.ylabel('Temperature (°C)')
+step = SpectrumData.filter_spectrum
+kwargs = {
+    'window_length': 45,
+    'polyorder': 3
+}
+spectra.add_step(step, kwargs)
 
-slope, intercept, r_value, p_value, std_err = st.linregress(wl_res[::,0], temps)
+step = SpectrumData.interpolate_spectrum
+kwargs = {'wl_step': 0.5e-12, }
+spectra.add_step(step, kwargs)
 
-wl = np.linspace(min(wl_res), max(wl_res), 10)
+step = SpectrumData.find_valley
+kwargs = {'prominence': 5}
+spectra.add_step(step, kwargs)
 
-plt.plot(wl*1e9, wl*slope + intercept, '-k', label='Fitted curve')
-print('Fitting results:')
-print('temp = ' + str(slope) + '*lambda_res + ' + str(intercept))
-print('R²: ' + str(r_value**2))
+step = SpectrumData.plot_spectrum
+spectra.add_step(step)
+
+spectra.run()
+spectra.export_csv('final')
+
+plt.waitforbuttonpress()
