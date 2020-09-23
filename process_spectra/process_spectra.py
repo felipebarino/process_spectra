@@ -5,255 +5,361 @@ Created on Tue Feb 11 17:58:09 2020
 @author: Felipe Barino
 """
 
-import sys
-import codecs
-import os, os.path
+import os
 import numpy as np
+import pandas as pd
 from scipy import signal as sg
+from copy import deepcopy
+from scipy.interpolate import interp1d
+from matplotlib import pyplot as plt
 
-class SpectraData:
-    spectra = list()
-    wl_res = list()
-    wl_res_att = list()
-    files = list()
-    measurements = np.array(list())
-    
-    wl = list()
-    optical_powers = list()
-    
-    """ Construtor:
-    Ao iniciar o objeto passar o caminho da pasta que contém os espectros
-    
-    OBS.: a) Tipo: str; b) Usar '/' no caminho
-    Exemplo:
-        C:/Users/Usuario/Documents/My_Experiment/Spectra/
-    """
-    def __init__(self, path):
-        if path[-1] != '/':
-            path = path + '/'
-        self.path = path
-        self.updateFiles()
-    
-    """ updateFiles
-    Atualiza o nome dos arquivos da pasta onde estão os espectros
-    """
-    def updateFiles(self):
-        self.files = list()
-        for name in os.listdir(self.path):
-            if os.path.isfile(os.path.join(self.path, name)):
-                self.files.append(self.path + name)
-    
-    """ getFiles
-    Retorna o caminho dos arquivos que contém os espectros
-    """
-    def getFiles(self):
-        return self.files
-    
-    """ fixOptisystem
-    Arruma o formato do texto que foi salvo os espectros pelo Optisystem
-    """
-    def fixOptisystem(self, file):
-        f = codecs.open(file, encoding='utf-8')
-        contents = f.read()
-        newcontents = contents.replace('E', 'e')
-        newcontents = newcontents.replace(',', '.')
-        f = open(file, 'w')
-        f.write(newcontents)
-        f.close()
-    
-    """ fixOptisystemFormats
-    Aplica fixOptisystem para todos os arquivos contidos em files
-    """
-    def fixOptisystemFormats(self):
-        for file in self.files:
-            self.fixOptisystem(file)
-    
-    """ setMeasurements
-    Seta quais foram os valores que geraram os respectivos espectros da pasta
-    
-    OBS.: a) Tipo: np.array() b) Usar a mesma ordem da variável files  
-    """
-    def setMeasurements(self, measurements):
-        self.measurements = measurements
-    
-    """ updateOptisystemSpectra
-    Atualiza a variável spectra com os espectros que têm o caminho descrito 
-    por files
-    
-    separator: char que separa os valores, se os arquivos são no formato:
-    1.2e-6, -80
-    1.3e-6, -81
-    ...
-    1.8e-6, -85
-    então deve utilizar: separator=','
-    
-    OBS.: caso não utilize o parâmetro, o padrão ';' será utilizado
-    """
-    def importSpectra(self, wl_multiplier=1, separator=';'):
-        self.spectra = list()
-        for file in self.files:
-            try:
-                spectrum = np.loadtxt(fname=file, delimiter=separator)
-            except:
-                self.fixOptisystem(file)
-                spectrum = np.loadtxt(fname=file, delimiter=separator)
-            if spectrum.shape[0] < spectrum.shape[1]:
-                spectrum = spectrum.transpose()
-            spectrum[::,0] = wl_multiplier*spectrum[::,0]
-            self.spectra.append(spectrum)
-    
-    """ maskSpectra
-    Corta o espectro com base em um intervalo de comprimento de onda
-    
-    wl_limits: é uma lista de dois valores com os comprimentos de onda máximo
-    e mínimo que se deseja obter no espectro final
-    """
-    def maskSpectra(self, wl_limits):
-        aux = list()
-        for spectrum in self.spectra:
-            wl = spectrum[::, 0]
-            a = wl >= min(wl_limits)
-            b =  wl <= max(wl_limits)
-            mask = [all(tup) for tup in zip(a, b)]
-            aux.append(spectrum[mask, ::])
-        self.spectra = aux
-    
-    """ filterSpectra
-    Filtra os espectros utilizando filtro de Savitz-Golay
-    https://en.wikipedia.org/wiki/Savitzky%E2%80%93Golay_filter
-    
-    size: tamanho do filtro
-            window_length : (int) The length of the filter window 
-                            (i.e. the number of coefficients). 
-                            window_length must be a positive odd
-    order: ordem do polinômio
-            polyorder :     (int) The order of the polynomial used 
-                            to fit the samples. polyorder must be less 
-                            than window_length.
-    
-    keep_old: se mantém ou não os espectros não filtrados
-                se mantém: apenas retorna o filtrado
-                se não: só atualiza os espectros que estão no objeto da classe
-            Por padrão, os espectros antigos não são mantidos
-    """
-    def filterSpectra(self, size, order, keep_old=False):       
-        aux = list()
-        for spectrum in self.spectra:
-            spectrum[::, 1] =  sg.savgol_filter(spectrum[::, 1], size, order)
-            aux.append(spectrum)
-        if keep_old:
-            return aux
-        else:
-            self.spectra = aux
-    
-    """ interpolateSpectra
-    Interpola os espectros com base em um vetor pré-fixado de comprimento de onda
-    
-    wl: vetor de comprimentos de onda com a resolução desejada
-    kind: tipo de função interpolante (‘linear’, ‘nearest’, ‘zero’, ‘slinear’, 
-                                       ‘quadratic’, ‘cubic’, ‘previous’, ‘next’)
-    """
-    def interpolateSpectra(self, wl, kind):
-        self.optical_powers = list()
-        from scipy import interpolate
-        self.wl = wl
-        for spectrum in self.spectra:
-            interpolant = interpolate.interp1d(spectrum[::,0], spectrum[::,1], kind=kind)
-            self.optical_powers.append(interpolant(wl))
-    
-    """ detectWlRes
-    Detecta o comprimento de onda ressonante
-    
-    wl: vetor dos compriemntos de onda ressonante do espectro
-    power: vetor com potência optica do espectro
-    threshold: limiar para detecção do vale
-    """
-    def detectWlRes(self, wl, power, threshold):
-        peaks = sg.find_peaks(-power, prominence=threshold)
-        peaks = peaks[0]
-        if len(peaks) < 1:
-            print('Resonant wavelength detection error!')
-            return -1
-        else:
-            return wl[peaks], power[peaks]
-    
-    """ updateWlRes
-    Encontra o comprimento de onda resonante de cada espectro
-    
-    threshold: limiar para detecção do vale
-    use_interp_data: se usa os dados interpolados ou não, por padrão: não usa
-    """
-    def updateWlRes(self, threshold, use_interp_data=True):
-        self.wl_res = list()
-        if use_interp_data and len(self.optical_powers) < 1:
-            print('Spectra has not been interpolated\n' + 
-                  'Use interpolateSpectra before using use_interp_data as True')
-            return -1
 
-        if use_interp_data:
-            for optical_power in self.optical_powers:
-                wl, power = self.detectWlRes(self.wl, optical_power, threshold)
-                self.wl_res.append(wl)
-                self.wl_res_att.append(power)
+class SpectrumData:
+    """
+    Uma classe usada para processar as informações de um espectro, com o
+    objetivo final de extrair o comprimento de onda e atenuação do vale
+    ressonante.
+    """
+
+    def __init__(self, filename, quiet=False, name=None):
+        """
+        Inicia o objeto, criando umas variáveis necessárias e carregando o
+        espectro.
+
+        :param filename: O nome do arquivo do espectro (saída do optisystem)
+        :type filename: str
+
+        :param quiet: Se True, o programa deixa de dar mensagens a cada etapa,
+            False por padrão.
+        :type quiet: bool, optional
+
+        :param name: O nome do espectro. Usado para motivos de salvar e debug.
+            É o filename, removendo a extensão, por padrão
+        :type name: str, optional
+        """
+        self.quiet = quiet
+        self.info = {
+            'name': name or filename[0:-4],
+        }
+
+        self.resonant_wl = None
+        self.resonant_wl_power = None
+        self.spectrum = self._load_spectrum(filename)
+
+    def _load_spectrum(self, filename,
+                       delimiter=';',
+                       wl_multiplier=1,
+                       dtype=np.float64):
+        """
+        Carrega o espectro e retorna um np array 2d com os valores
+        (comprimentos de onda e potência)
+
+        :param filename: O nome do arquivo do espectro
+        :type filename: str
+
+        :param delimiter: O delimitador que separa os dois valores no txt. ;
+            por padrão (usado pelo optisystem)
+        :type delimiter: str, optional
+
+        :param wl_multiplier: Um valor que multiplica todos os valores de
+            comprimentos de onda. Deve ser um valor que faz os comprimentos serem
+            vistos em metros.
+            Ex: para comprimentos salvos como nm (10e-9), esse
+            valor deve ser 10e9.
+            1 por padrão.
+        :param dtype: float, optional
+
+        :return: um np array 2d com os valores (comprimentos de onda e
+            potência)
+        """
+        if not self.quiet:
+            print(f'Carregando {self.info["name"]}')
+
+        def conv(text):
+            text = text.replace(b'E', b'e')
+            text = text.replace(b',', b'.')
+            return float(text)
+
+        spectrum = np.loadtxt(filename, dtype=dtype,
+                              converters={0: conv, 1: conv}, delimiter=';')
+
+        if spectrum[0, 0] > spectrum[-1, 0]:
+            spectrum = spectrum[::-1]
+
+        return spectrum
+
+    def set_additional_info(self, info):
+        """
+        Adiciona informações adicionais ao espectro, como medidas, por exemplo
+
+        :param info: Um dicionário com as informações a serem adicionadas.
+            Ex: { 'periodo': 400 , 'temp': 20, 'strain': 200, 'mode': 4 }
+        :type info: dict
+
+        :return: None
+        """
+        for key in info.keys():
+            self.info[key] = info[key]
+
+    def mask_spectrum(self, wl_limits):
+        """
+        Corta o espectro com base em um intervalo de comprimento de onda
+
+        :param wl_limits: Uma tupla com 2 valores, contendo os limites do corte
+        :type wl_limits: tuple
+
+        :return: O espectro (objeto dessa classe) cortado
+        """
+        if not self.quiet:
+            print(f'Cortando {self.info["name"]}')
+
+        region = np.where(min(wl_limits) <= self.spectrum[0] <= max(wl_limits))
+
+        masked = deepcopy(self)
+        masked.spectrum = masked.spectrum[region]
+
+        return masked
+
+    def filter_spectrum(self, window_length, polyorder):
+        """
+        Filtra o espectro utilizando o filtro de Savitzky–Golay
+
+        :param window_length: O tamanho da 'janela do filtro' (o número de
+            coeficientes usados nos cálculos do filtro.
+        :type window_length: int, deve ser ímpar
+
+        :param polyorder: A ordem dos polinômios usados nos cálculos do filtro
+        :type polyorder: int, deve ser menor do que o 'window_length'
+
+        :return: O espectro (objeto dessa classe) após aplicação do filtro.
+        """
+        if not self.quiet:
+            print(f'Filtrando {self.info["name"]}')
+
+        filtered = deepcopy(self)
+
+        print(window_length)
+
+        filtered.spectrum[::, 1] = sg.savgol_filter(
+            filtered.spectrum[::, 1], window_length, polyorder)
+
+        return filtered
+
+    def interpolate_spectrum(self, wl_step, wl_limits=None,
+                             kind='cubic'):
+        """
+        Interpola o espectro para os valores de comprimento de onda dentro dos
+        limites, considerando incrementos discretos de 'wl_step'.
+
+        :param wl_step: O tamanho do incremento.
+        :type wl_step: float
+
+        :param wl_limits: Os limites da região para interpolar. Usa os limites
+            do espectro original como padrão.
+        :type wl_limits: tuple with 2 floats
+
+        :param kind: Tipo de interpolação. Deve ser um desses: (‘linear’,
+            ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘previous’,
+            ‘next’).
+        :type kind: str
+
+        :return: O espectro (objeto dessa classe) gerado pela interpolação.
+        """
+        if not self.quiet:
+            print(f'Interpolando {self.info["name"]}')
+
+        wl_limits = wl_limits or (self.spectrum[0, 0], self.spectrum[-1, 0])
+        wl = [x for x in np.arange(wl_limits[0], wl_limits[1], wl_step)]
+
+        xs = self.spectrum[::, 0]
+        ys = self.spectrum[::, 1]
+
+        f = interp1d(xs, ys, kind=kind)
+
+        interpolated = deepcopy(self)
+        interpolated.spectrum = np.array(
+            [x for x in zip(wl, f(wl))],
+            dtype=np.float64)
+
+        return interpolated
+
+    def find_valley(self, prominence=5):
+        """
+        Tenta achar o vale ressonante do espectro. Se achar, salva no
+        dicionário 'info' objeto.
+
+        :param prominence: A 'proeminência' ('altura do pico') mínima do vale.
+        :type prominence: float
+
+        :return: As coordenadas do vale (comprimento de onda, potência)
+        """
+        if not self.quiet:
+            print(f'Tentando achar o vale do {self.info["name"]}')
+
+        xs = self.spectrum[::, 0]
+        ys = self.spectrum[::, 1]
+        valleys, properties = sg.find_peaks(-ys, prominence=prominence)
+
+        if len(valleys) < 1:
+            raise Exception(f'No valleys found for {self.info["name"]}.')
+
+        if len(valleys) > 1:
+            print(f'Found {len(valleys)} valleys for the spectrum'
+                  f' \"{self.info["name"]}\", returning the one'
+                  f' with higher prominence.')
+
+        best_match = np.argmax(properties['prominences'])
+        x, y = xs[valleys[best_match]], ys[valleys[best_match]]
+
+        self.info['resonant_wl'] = x
+        self.info['resonant_wl_power'] = y
+        return x, y
+
+    def plot_spectrum(self, plot_opts=None, subplots=None):
+        """
+        plota o espectro em um gráfico, com o vale marcado com um x, se tiver
+        sido encontrado
+
+        :param plot_opts: Um dicionário com opções para plotar, se nenhum for
+            passado, será usado um padrão definido na função.
+        :type plot_opts: dict
+
+        :param subplots: Os objetos criados pelo matplotlib para fazer um plot,
+            retornados pelo 'plt.subplots()'. Geralmente salvos como (fig, ax).
+        :type subplots: tuple
+
+        :return: None
+        """
+        if not self.quiet:
+            print(f'Plotando {self.info["name"]}')
+
+        plot_opts = plot_opts or {
+            'xlim': (self.spectrum[0, 0], self.spectrum[-1, 0]),
+            'ylim': (-100, 0), 'animated': False, 'interval': 1e-6}
+
+        if subplots is None:
+            fig, ax = plt.subplots()
         else:
-            for spectrum in self.spectra:
-                wl, power = self.detectWlRes(spectrum[::,0], spectrum[::,1], threshold)
-                self.wl_res.append(wl)   
-                self.wl_res_att.append(power)
-    
-    """ getWlRes
-    Retorna os comprimentos de onda ressonante
-    """
-    def getWlRes(self):
-        return np.array(self.wl_res)
-    
-    """ plotSpectra
-    Mostra os espectros
-    
-    plot_opts: dicionário com opções do plot
-    """
-    def plotSpectra(self, plot_opts):
-        from matplotlib import pyplot as plt
-        
-        fig, ax = plt.subplots()
+            fig, ax = subplots
+
         ax.set_xlim(plot_opts['xlim'])
         ax.set_ylim(plot_opts['ylim'])
         ax.set_xlabel('Wavelength (nm)')
         ax.set_ylabel('Optical power (dBm)')
-        i = 0
-        for spectrum in self.spectra:
-            if len(self.wl_res) > 0:
-                ax.plot(self.wl_res[i]*1e9, self.wl_res_att[i], 'xk')  
-            ax.plot(spectrum[::,0]*1e9, spectrum[::,1])
-            i+=1
-    
-    """ getSpectra
-    Retorna uma lista com os espectros
-    
-    interpolated: se retorna os espectros interpolados junto com o wl
+
+        xs = self.spectrum[::, 0]
+        ys = self.spectrum[::, 1]
+
+        ax.plot(xs, ys)
+        if 'resonant_wl' in self.info.keys() is not None:
+            ax.plot(self.info['resonant_wl'], self.info['resonant_wl_power'],
+                    'xk')
+
+
+class MassSpectraData:
     """
-    def getSpectra(self, interpolated=False):
-        if interpolated:
-            return self.wl, self.optical_powers
-        else:
-            return self.spectra
-    
-    """ exportData
-    Exporta o comprimento de onda ressonante e os mensurandos
-    
-    path: caminho de saída para o arquivo ser salvo, incluindo nome do arquivo 
-    com extensão do mesmo (csv ou xls)
+    Uma classe usada para processar vários espectros de uma vez.
     """
-    def exportData(self, path):
-        import pandas as pd
-        data = [self.measurements, np.array(self.wl_res)[::,0]]
-        cols = ['Measure', 'lambda_res']
-        df = pd.DataFrame(data, index=cols).transpose()
-        
-        _, extension = path.split(sep='.')
-        if extension == 'csv':
-            df.to_csv(path, index=False)
-        elif extension == 'xls':
-            df.to_excel(path, index=False)
-        else:
-            print('Sorry, ' + extension + ' is an unsuported format.')
+    def __init__(self, filenames, output_path=None, add_info=None,
+                 batch_size=50):
+        """
+        Inicia o objeto, criando umas variáveis necessárias..
+
+        :param filenames: Um array like com os nomes dos arquivos dos
+            espectros a serem abertos.
+        :type filenames: array like
+
+        :param output_path: O caminho da pasta onde os arquivos vão ser salvos.
+        :type output_path: str
+
+        :param add_info: Um array like contendo os nomes das informações a
+            serem adicionadas no arquivo de saída (como temp, strain, etc...)
+        :type add_info: array like
+
+        :param batch_size: A quantidade de espectros a serem analisados entre
+            cada salvamento de segurança (checkpoint.csv)
+        :type batch_size: int
+        """
+        self.filenames = list(filenames)
+        self.out_path = output_path or 'output'
+        if not os.path.isdir(self.out_path):
+            os.mkdir(self.out_path)
+
+        self.steps = list()
+        self.kwargs = list()
+        self.add_info = add_info
+        self.batch_size = batch_size
+
+        self.columns = ['name', 'resonant_wl', 'resonant_wl_power']
+        if add_info is not None:
+            for info in add_info:
+                self.columns = self.columns.append(info)
+
+        self.df = pd.DataFrame(columns=self.columns)
+
+    def add_step(self, step, kwargs=None):
+        """
+        Adiciona uma função para ser aplicada à todos os espectros, com os
+        argumentos definidos no dicionário kwargs. Se a função tiver
+        argumentos obrigatórios, esses devem estar inclusos no kwargs.
+
+        :param step: A função a ser adicionada. Deve aceitar um objeto da
+            classe SpectrumData como primeiro argumento ou ser uma função da
+            classe.
+        :type step: Uma função
+
+        :param kwargs: Um dicionário contendo pares com a key sendo uma str
+            com o nome de um argumento da função em step e value o valor desse
+            argumento.
+        :type kwargs: dict, optional
+
+        :return: None
+        """
+        self.steps.append(step)
+        kwargs = kwargs or dict()
+        self.kwargs.append(kwargs)
+
+    def run(self):
+        """
+        Aplica todas as funções em self.steps a todos os espectros (um por
+        vez).  Ao finalizar as funções de um espectro, tenta passar as
+        informações definidas no self.columns para o dataframe do objeto.
+        Salva checkpoints a cada intervalo de self.batch_size e um último
+        no final.
+
+        :return: None
+        """
+        try:
+            index = self.steps.index(SpectrumData.plot_spectrum)
+            self.kwargs[index]['subplots'] = plt.subplots()
+        except ValueError:
+            pass
+
+        for i, filename in enumerate(self.filenames):
+            print(f'{5 * "-"}calculando {i + 1}/{len(self.filenames)}{5 * "-"}')
+            spectrum = SpectrumData(filename)
+            for c, step in enumerate(self.steps):
+                ret = step(spectrum, **self.kwargs[c])
+                if type(ret) == SpectrumData:
+                    spectrum = ret
+
+            self.df = self.df.append(spectrum.info, ignore_index=True)
+
+            if (i % self.batch_size) == 0 and i != 0:
+                self.export_csv(os.path.join(self.out_path, 'checkpoint.csv'))
+
+        self.export_csv(os.path.join(self.out_path, 'checkpoint.csv'))
+
+    def export_csv(self, export_name):
+        """
+        Exporta o dataframe atual como um csv
+
+        :param export_name: O nome do arquivo de saída
+        :type export_name: str
+
+        :return: None
+        """
+        if export_name[-4:] != '.csv':
+            export_name += '.csv'
+
+        self.df.to_csv(export_name, index=False, sep=',', decimal='.')
