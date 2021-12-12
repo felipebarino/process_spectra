@@ -4,7 +4,7 @@ Created on Tue Feb 11 17:58:09 2020
 
 @author: Felipe Barino, Guilherme Sampaio
 
-Nesse pacote estã a biblioteca criada com a intenção de analisar os espectros.
+Nesse pacote está a biblioteca criada com a intenção de analisar os espectros.
 
 Esse módulo é o básico para simulações e extração de informações a partir de
 espectros ópticos. É feito para trabalhar com grandes conjuntos de espectros
