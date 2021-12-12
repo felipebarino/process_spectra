@@ -1,11 +1,12 @@
 [tool.poetry]
 name = "process_spectra"
-version = "0.2.0"
-description = "A package designed to process optical spectra of fiber optic sensors based on long period gratings (LPGs). The documentation is written in portuguese, since the project was conceived to improve research at a brazilian university lab (LITel - UFJF). If the contents of the library may be useful to you, and you do not speak portuguese, please send us an e-mail."
+version = "0.2.2"
+description = "A package designed to process optical spectra of fiber optic sensors based on long period gratings (LPGs)."
 authors = ["Felipe Barino <felipebarino@gmail.com>", "Guilherme Sampaio <guilherme_albuquerque2@hotmail.com>"]
 license = "MIT"
 repository = "https://github.com/felipebarino/process_spectra"
 homepage = "https://github.com/felipebarino/process_spectra"
+readme = "README.md"
 
 
 [tool.poetry.dependencies]
