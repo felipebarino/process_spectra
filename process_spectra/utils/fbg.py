@@ -1,3 +1,5 @@
+"""Esse módulo tem a função para calcular a refletância da fbg"""
+
 import numpy as np
 
 
