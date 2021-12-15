@@ -5,8 +5,10 @@ carregamento, de extração ou filtragem do espectro
 
 import os
 import numpy as np
+from process_spectra.utils import lorentz
 from scipy import signal as sg
 from scipy.interpolate import interp1d
+from scipy.optimize import curve_fit
 from matplotlib import pyplot as plt
 from process_spectra import utils
 
@@ -326,6 +328,71 @@ def find_valley(spectrum, _, prominence=5, ignore_errors=False, quiet=False):
     info['resonant_wl_power'] = y
 
     return spectrum, info
+
+
+def get_approximate_valley(spectrum, _, approx_func=lorentz, prominence=5,
+                           resolution_proximity=2):
+    """
+    Aproxima a região do vale como uma curva determinada na 'approx_func',
+        depois extrai o comprimento de onda ressonante a partir da curva
+        aproximada (funciona também para espectros com mais de um vale)
+
+    :param spectrum: O espectro
+    :type spectrum: np.ndarray
+
+    :param _: O dicionário com as informações (não é usado)
+    :type _: dict
+
+    :param approx_func: A função de approximação (lorentziana por padrão)
+    :type approx_func: function
+
+    :param prominence: A prominência mínima dos vales
+    :type prominence: float
+
+    :param resolution_proximity: A proximidade que o vale aproximado deve
+        estar do observado sem aproximação (multiplicado pela resolução)
+    :type resolution_proximity: float
+
+    :return: O espectro original e o dicionário com os valores de comprimento
+        de onda e potência extraídos
+    :rtype: (np.ndarray, dict)
+    """
+
+    wl = spectrum[::, 0]
+    power = spectrum[::, 1]
+    resolution = np.mean(np.diff(wl))
+
+    peaks, peak_info = sg.find_peaks(-power, prominence=prominence)
+
+    _info = dict()
+
+    for i in range(len(peaks)):
+        valley = spectrum[peak_info['left_bases'][i]: peak_info['right_bases'][i], ::]
+
+        p0 = [-peak_info['prominences'][i]/2,
+              wl[peaks[i]]*1e6,
+              1,
+              1]
+
+        popt, _ = curve_fit(approx_func, valley[::, 0]*1e6, valley[::, 1],
+                            p0=p0,
+                            bounds=(-np.inf, (0, np.inf, np.inf, np.inf)))
+
+        resonant_wl = popt[1]*1e-6
+        resonant_power = approx_func(popt[1], *popt)
+
+        if abs(resonant_wl - wl[peaks[i]]) > resolution_proximity * resolution:
+            resonant_wl = wl[peaks[i]]
+            resonant_power = power[peaks[i]]
+
+        if len(peaks) == 1:
+            _info['resonant_wl'] = resonant_wl
+            _info['resonant_wl_power'] = resonant_power
+        else:
+            _info[f'resonant_wl_{i}'] = resonant_wl
+            _info[f'resonant_wl_power_{i}'] = resonant_power
+
+    return spectrum, _info
 
 
 def get_max_power(spectrum, _):
