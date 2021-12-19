@@ -151,7 +151,8 @@ def mask_spectrum(spectrum, _, wl_limits, quiet=False):
     if not quiet:
         print(f'Cortando')
 
-    region = np.where(min(wl_limits) <= spectrum[0] <= max(wl_limits))
+    region = np.where((min(wl_limits) <= spectrum[::, 0]) &
+                      (spectrum[::, 0] <= max(wl_limits)))
     masked = spectrum[region]
 
     return masked, dict()
@@ -330,8 +331,9 @@ def find_valley(spectrum, _, prominence=5, ignore_errors=False, quiet=False):
     return spectrum, info
 
 
-def get_approximate_valley(spectrum, _, approx_func=lorentz, prominence=5,
-                           resolution_proximity=2):
+def get_approximate_valley(spectrum, info, approx_func=lorentz, prominence=5,
+                           resolution_proximity=2, p0=None, valley_samples=100,
+                           plot=False):
     """
     Aproxima a região do vale como uma curva determinada na 'approx_func',
         depois extrai o comprimento de onda ressonante a partir da curva
@@ -340,8 +342,8 @@ def get_approximate_valley(spectrum, _, approx_func=lorentz, prominence=5,
     :param spectrum: O espectro
     :type spectrum: np.ndarray
 
-    :param _: O dicionário com as informações (não é usado)
-    :type _: dict
+    :param info: O dicionário com as informações (não é usado)
+    :type info: dict
 
     :param approx_func: A função de approximação (lorentziana por padrão)
     :type approx_func: function
@@ -353,6 +355,21 @@ def get_approximate_valley(spectrum, _, approx_func=lorentz, prominence=5,
         estar do observado sem aproximação (multiplicado pela resolução)
     :type resolution_proximity: float
 
+    :param p0: Os parâmetros iniciais da aproximação. Deve ser uma lista com
+        os parâmetros da função de aproximação (em ordem, ignorando x). Devem
+        ser ajustados se a aproximação consistentemente falhar.
+    :type p0: list
+
+    :param valley_samples: A quantidade máxima de samples em um vale. Deve ser
+        ajustado de acordo com a resolução do medidor
+    :type valley_samples: int
+
+    :param plot: Se deve ou não plotar os gráficos com aproximações. Se for
+        True, o script deve estar rodando em um caminho que possui uma pasta
+        chamada 'plots/'. Esse parâmetro serve para ajudar a ajustar os p0 e
+        valley_samples
+    :type plot: bool
+
     :return: O espectro original e o dicionário com os valores de comprimento
         de onda e potência extraídos
     :rtype: (np.ndarray, dict)
@@ -362,24 +379,34 @@ def get_approximate_valley(spectrum, _, approx_func=lorentz, prominence=5,
     power = spectrum[::, 1]
     resolution = np.mean(np.diff(wl))
 
-    peaks, peak_info = sg.find_peaks(-power, prominence=prominence)
+    peaks, peak_info = sg.find_peaks(-power, prominence=prominence,
+                                  plateau_size=0, wlen=valley_samples)
 
     _info = dict()
+
+    if plot:
+        fig, ax = plt.subplots()
+        ax.plot(wl, power)
 
     for i in range(len(peaks)):
         valley = spectrum[peak_info['left_bases'][i]: peak_info['right_bases'][i], ::]
 
-        p0 = [-peak_info['prominences'][i]/2,
-              wl[peaks[i]]*1e6,
+        p0 = p0 or [-peak_info['prominences'][i],
+              wl[peaks[i]] * 1e6,
               1,
-              1]
+              power[peaks[i]]]
 
-        popt, _ = curve_fit(approx_func, valley[::, 0]*1e6, valley[::, 1],
-                            p0=p0,
-                            bounds=(-np.inf, (0, np.inf, np.inf, np.inf)))
+        try:
+            popt, _ = curve_fit(approx_func, valley[::, 0] * 1e6, valley[::, 1],
+                                p0=p0, max_nfev=10000,
+                                bounds=(-np.inf, (0, np.inf, np.inf, np.inf)))
 
-        resonant_wl = popt[1]*1e-6
-        resonant_power = approx_func(popt[1], *popt)
+            resonant_wl = popt[1] * 1e-6
+            resonant_power = approx_func(popt[1], *popt)
+
+        except RuntimeError:
+            resonant_wl = wl[peaks[i]]
+            resonant_power = power[peaks[i]]
 
         if abs(resonant_wl - wl[peaks[i]]) > resolution_proximity * resolution:
             resonant_wl = wl[peaks[i]]
@@ -391,6 +418,12 @@ def get_approximate_valley(spectrum, _, approx_func=lorentz, prominence=5,
         else:
             _info[f'resonant_wl_{i}'] = resonant_wl
             _info[f'resonant_wl_power_{i}'] = resonant_power
+
+        if plot:
+            ax.plot(valley[::, 0], approx_func(valley[::, 0] * 1e6, *popt))  # debug
+
+    if plot:
+        fig.savefig(f"plots/{info['name']}")  # debug
 
     return spectrum, _info
 
