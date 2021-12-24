@@ -68,7 +68,25 @@ def remove_extension(filename):
 
 
 def interpolate(original, wl_limits, wl_step, kind='cubic'):
-    """Função para interpolar um np array. Deve ser passado pro pacote"""
+    """
+    Interpola o array original entre os limites, com o passo especificado
+
+    :param original: O array original
+    :type original: np.array
+
+    :param wl_limits: Os limites da interpolação
+    :type wl_limits: tuple(float, float)
+
+    :param wl_step: O passo de interpolação
+    :type wl_step: float
+
+    :param kind: O tipo de interpolação. Para mais detalhes, ver o kind do
+        interp1d do scipy
+    :type kind: str
+
+    :return: O array interpolado
+    :rtype: np.array
+    """
     wl = [x for x in np.arange(wl_limits[0], wl_limits[1], wl_step)]
     f = interp1d(original[::, 0], original[::, 1], kind)
 
@@ -77,3 +95,52 @@ def interpolate(original, wl_limits, wl_step, kind='cubic'):
 
     return final
 
+
+def gauss(x, a, x0, sigma, bias):
+    """
+    Retorna o valor da função gaussiana em x para os parâmetros
+
+    :param x: Entrada (x)
+    :type x: float, np.array
+
+    :param a: Escala da função
+    :type a: float
+
+    :param x0: A média (Mu)
+    :type x0: float
+
+    :param sigma: O desvio padrão (Sigma)
+    :type sigma: float
+
+    :param bias: O deslocamento vertical
+    :type bias: float
+
+    :return: O valor no ponto específicado
+    :rtype: Mesmo de x
+    """
+    return a*np.exp(-(x-x0)**2/(2*sigma**2)) + bias
+
+
+def lorentz(x, a, x0, w, bias):
+    """
+    Retorna o valor da função Lorentziana em x para os parâmetros
+
+    :param x: Entrada (x)
+    :type x: float, np.array
+
+    :param a: Escala da função
+    :type a: float
+
+    :param x0: A média (Mu)
+    :type x0: float
+
+    :param w: O FWHM (full width at half maximum) (Gama)
+    :type w: float
+
+    :param bias: O deslocamento vertical
+    :type bias: float
+
+    :return: O valor no ponto específicado
+    :rtype: Mesmo de x
+    """
+    return a*(1 + ((x - x0)/(w/2))**2)**(-1) + bias
