@@ -422,6 +422,10 @@ def get_approximate_valley(spectrum, info, approx_func=lorentz, prominence=5,
         if plot:
             ax.plot(valley[::, 0], approx_func(valley[::, 0] * 1e6, *popt))  # debug
 
+    # Get the index to the best prominence. Can be useful for interrogation
+    best_index = np.argmax(peak_info['prominences'])
+    _info['best_index'] = best_index
+
     if plot:
         fig.savefig(f"plots/{info['name']}")  # debug
 
