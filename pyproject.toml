@@ -1,8 +1,9 @@
 [tool.poetry]
 name = "process_spectra"
-version = "0.2.2"
+version = "0.2.3"
 description = "A package designed to process optical spectra of fiber optic sensors based on long period gratings (LPGs)."
 authors = ["Felipe Barino <felipebarino@gmail.com>", "Guilherme Sampaio <guilherme_albuquerque2@hotmail.com>"]
+maintainers = ["Guilherme Sampaio <guilherme_albuquerque2@hotmail.com>", "Felipe Barino <felipebarino@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/felipebarino/process_spectra"
 homepage = "https://github.com/felipebarino/process_spectra"
