@@ -337,7 +337,9 @@ def get_approximate_valley(spectrum, info, approx_func=lorentz, prominence=5,
     """
     Aproxima a região do vale como uma curva determinada na 'approx_func',
         depois extrai o comprimento de onda ressonante a partir da curva
-        aproximada (funciona também para espectros com mais de um vale)
+        aproximada (funciona também para espectros com mais de um vale).
+        Também retorna o índice do vale com maior proeminência (best_index),
+        para integrar melhor na interrogação do sensor
 
     :param spectrum: O espectro
     :type spectrum: np.ndarray
