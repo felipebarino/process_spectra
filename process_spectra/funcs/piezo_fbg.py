@@ -8,16 +8,20 @@ Esse pacote adiciona funções para simular fbgs acopladas a componentes
 piezoelétricos, de forma que a vibração do componente modula a refletância
 das fbgs.
 """
+import os.path
 
 import numpy as np
 from math import sin, pi
+
+import pandas as pd
+
 from process_spectra.utils import get_power
 from process_spectra.utils.fbg import get_fbg_reflectance
 from process_spectra.funcs import simulate_gain
 
 
 def simulate_piezo_fbg(spectrum,
-                       _,
+                       info,
                        frequency,
                        amplitude,
                        fbg_wl_bragg,
@@ -28,6 +32,7 @@ def simulate_piezo_fbg(spectrum,
                        electrical_noise=None,
                        sensitivity=6.475e-12,
                        max_harmonic_index=2,
+                       save_samples_folder=None,
                        quiet=False):
     """
     Essa função simula a atuação de uma fbg acoplada com um piezoelétrico ao
@@ -49,8 +54,8 @@ def simulate_piezo_fbg(spectrum,
     :param spectrum: O espectro
     :type spectrum: np.ndarray
 
-    :param _: Ignorado. O programa entrega o info, e essa função não usa
-    :type _: Any
+    :param info: O dicionário de informações entregue
+    :type info: dict
 
     :param frequency: A frequência da tensão no piezoelétrico
     :type frequency: float
@@ -73,7 +78,8 @@ def simulate_piezo_fbg(spectrum,
     :type total_time: float
 
     :param sample_rate: A taxa de amostragem temporal, em Hz. É de
-        (max_harmonic_index + 1) * frequency por padrão
+        (max_harmonic_index + 1) * 2 * frequency por padrão (frequência de
+        Nyquist)
     :type sample_rate: float
 
     :param electrical_noise: O ruído elétrico na leitura de potência da fbg.
@@ -91,6 +97,10 @@ def simulate_piezo_fbg(spectrum,
     :param max_harmonic_index: O harmônico máximo que vai ser salvo no
         espectro. 2 por padrão
     :type max_harmonic_index: int
+
+    :param save_samples_folder: O caminho para a pasta onde salvar os valores de
+        potência das amostras. Se for None, não salva
+    :type save_samples_folder: str
 
     :param quiet: Se o programa deve printar o progresso
     :type quiet: bool
@@ -111,7 +121,7 @@ def simulate_piezo_fbg(spectrum,
     wls = spectrum[::, 0]
 
     fbg_powers = []
-    for c, t in enumerate(sim_time):
+    for t in enumerate(sim_time):
         piezo_voltage = amplitude * sin(2*pi*frequency*t)
         piezo_modulation = piezo_voltage * sensitivity
 
@@ -132,14 +142,24 @@ def simulate_piezo_fbg(spectrum,
     fourier_transform_mag = np.abs(fourier_transform)
     fourier_transform_phase = np.angle(fourier_transform, deg=True)
 
-    info = dict()
+    _info = {}
 
-    for i in range(0, max_harmonic_index + 1):
+    for i in range(max_harmonic_index + 1):
         harmonic_freq = i*frequency
-        info[f'{fbg_label}_harmonic{i}_mag'] = \
+        _info[f'{fbg_label}_harmonic{i}_mag'] = \
             fourier_transform_mag[np.where(fourier_frequencies == harmonic_freq)][0]
 
-        info[f'{fbg_label}_harmonic{i}_pahse'] = \
+        _info[f'{fbg_label}_harmonic{i}_phase'] = \
             fourier_transform_phase[np.where(fourier_frequencies == harmonic_freq)][0]
 
+    if save_samples_folder:
+        save_samples(fbg_powers, save_samples_folder, info)
+
     return spectrum, info
+
+
+def save_samples(samples: list, path: str, info: dict):
+    """Salva a lista de samples da função principal do .py"""
+    
+    array = np.array(samples)
+    np.save(os.path.join(path, info["name"]), array)
