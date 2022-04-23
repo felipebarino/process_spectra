@@ -121,7 +121,7 @@ def simulate_piezo_fbg(spectrum,
     wls = spectrum[::, 0]
 
     fbg_powers = []
-    for t in enumerate(sim_time):
+    for t in sim_time:
         piezo_voltage = amplitude * sin(2*pi*frequency*t)
         piezo_modulation = piezo_voltage * sensitivity
 
@@ -160,6 +160,6 @@ def simulate_piezo_fbg(spectrum,
 
 def save_samples(samples: list, path: str, info: dict):
     """Salva a lista de samples da função principal do .py"""
-    
+
     array = np.array(samples)
     np.save(os.path.join(path, info["name"]), array)
