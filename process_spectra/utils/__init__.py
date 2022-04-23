@@ -23,7 +23,7 @@ def get_power(y, x=None, unit='dBm', noise=None):
         como variância na geração de um aleatório
     :type noise: float
 
-    :return: A potência calculada
+    :return: A potência calculada, em Watts
     """
 
     if unit.upper() in ['DBM', 'DBMW']:

@@ -88,7 +88,10 @@ class MassSpectraData:
                     spectrum, _info = step(spectrum, info, **self.kwargs[c])
                     info = {**info, **_info}
 
-            self.df = self.df.append(info, ignore_index=True)
+            info_df = pd.DataFrame(info, index=[0, ])
+            self.df = pd.concat([self.df, info_df],
+                                ignore_index=True,
+                                axis=0, join='outer')
 
         if self.out_filename:
             self.export_csv(self.out_filename)
