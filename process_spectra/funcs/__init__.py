@@ -332,7 +332,7 @@ def find_valley(spectrum, _, prominence=5, ignore_errors=False, quiet=False):
 
 
 def get_approximate_valley(spectrum, info, approx_func=lorentz, prominence=5,
-                           resolution_proximity=2, p0=None, valley_samples=100,
+                           resolution_proximity=2, p0=None, dwl=2,
                            plot=False):
     """
     Aproxima a região do vale como uma curva determinada na 'approx_func',
@@ -362,9 +362,8 @@ def get_approximate_valley(spectrum, info, approx_func=lorentz, prominence=5,
         ser ajustados se a aproximação consistentemente falhar.
     :type p0: list
 
-    :param valley_samples: A quantidade máxima de samples em um vale. Deve ser
-        ajustado de acordo com a resolução do medidor
-    :type valley_samples: int
+    :param dwl: Espaçamento ao redor do vale que será usado para ajuste da função
+    :type valley_samples: float
 
     :param plot: Se deve ou não plotar os gráficos com aproximações. Se for
         True, o script deve estar rodando em um caminho que possui uma pasta
@@ -382,7 +381,7 @@ def get_approximate_valley(spectrum, info, approx_func=lorentz, prominence=5,
     resolution = np.mean(np.diff(wl))
 
     peaks, peak_info = sg.find_peaks(-power, prominence=prominence,
-                                  plateau_size=0, wlen=valley_samples)
+                                  plateau_size=0, wlen=None)
 
     _info = dict()
 
@@ -390,27 +389,27 @@ def get_approximate_valley(spectrum, info, approx_func=lorentz, prominence=5,
         fig, ax = plt.subplots()
         ax.plot(wl, power)
 
-    for i in range(len(peaks)):
-        valley = spectrum[peak_info['left_bases'][i]: peak_info['right_bases'][i], ::]
+    _info['valley_count'] = len(peaks)
 
-        p0 = p0 or [-peak_info['prominences'][i],
-              wl[peaks[i]] * 1e6,
-              1,
-              power[peaks[i]]]
+    for i in range(len(peaks)):
+        wl0 = wl[peaks[i]]
+        mask = (spectrum[:, 0] > wl0 - dwl/2) & (spectrum[:, 0] < wl0 + dwl/2)
+        valley = spectrum[mask, ::]
 
         try:
-            popt, _ = curve_fit(approx_func, valley[::, 0] * 1e6, valley[::, 1],
-                                p0=p0, max_nfev=10000,
-                                bounds=(-np.inf, (0, np.inf, np.inf, np.inf)))
+            print(p0)
+            print(((-np.inf, wl0-resolution_proximity*resolution, 1e-10, -np.inf),
+                                        (+np.inf, wl0+resolution_proximity*resolution, 100, np.inf)))
 
-            resonant_wl = popt[1] * 1e-6
+            popt, _ = curve_fit(approx_func, valley[::, 0], valley[::, 1],
+                                p0=None, max_nfev=10000,
+                                bounds=((-np.inf, wl0-resolution_proximity*resolution, 1e-10, -np.inf),
+                                        (+np.inf, wl0+resolution_proximity*resolution, 100, np.inf)))
+
+            resonant_wl = popt[1]
             resonant_power = approx_func(popt[1], *popt)
 
         except RuntimeError:
-            resonant_wl = wl[peaks[i]]
-            resonant_power = power[peaks[i]]
-
-        if abs(resonant_wl - wl[peaks[i]]) > resolution_proximity * resolution:
             resonant_wl = wl[peaks[i]]
             resonant_power = power[peaks[i]]
 
