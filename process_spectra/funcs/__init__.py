@@ -397,10 +397,6 @@ def get_approximate_valley(spectrum, info, approx_func=lorentz, prominence=5,
         valley = spectrum[mask, ::]
 
         try:
-            print(p0)
-            print(((-np.inf, wl0-resolution_proximity*resolution, 1e-10, -np.inf),
-                                        (+np.inf, wl0+resolution_proximity*resolution, 100, np.inf)))
-
             popt, _ = curve_fit(approx_func, valley[::, 0], valley[::, 1],
                                 p0=None, max_nfev=10000,
                                 bounds=((-np.inf, wl0-resolution_proximity*resolution, 1e-10, -np.inf),
