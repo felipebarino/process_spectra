@@ -155,7 +155,7 @@ def simulate_piezo_fbg(spectrum,
     if save_samples_folder:
         save_samples(fbg_powers, save_samples_folder, info)
 
-    return spectrum, info
+    return spectrum, _info
 
 
 def save_samples(samples: list, path: str, info: dict):

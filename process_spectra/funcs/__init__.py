@@ -322,11 +322,14 @@ def find_valley(spectrum, _, prominence=5, ignore_errors=False, quiet=False):
         print(f'Achou {len(valleys)} vales pro espectro, '
               f'retornando o com maior proeminência')
 
-    best_match = np.argmax(properties['prominences'])
-    x, y = xs[valleys[best_match]], ys[valleys[best_match]]
-
-    info['resonant_wl'] = x
-    info['resonant_wl_power'] = y
+    try:
+        best_match = np.argmax(properties['prominences'])
+        x, y = xs[valleys[best_match]], ys[valleys[best_match]]
+        info['resonant_wl'] = x
+        info['resonant_wl_power'] = y
+    except ValueError:  # Did not find any, so argmax will fail
+        info['resonant_wl'] = 0
+        info['resonant_wl_power'] = 0
 
     return spectrum, info
 
